@@ -19,6 +19,7 @@ historia-storm/
 │   └── requirements.txt
 ├── .env.example
 ├── .gitignore
+├── render.yaml
 └── README.md
 ```
 
