@@ -25,11 +25,15 @@ async function callPersona(persona, brief, retries = 2) {
         }),
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const detail =
+          typeof data?.detail === "string"
+            ? data.detail
+            : data?.detail?.error?.message || data?.error || `HTTP ${response.status}`;
+        throw new Error(detail);
       }
 
-      const data = await response.json();
       if (!data.result) {
         throw new Error("空响应");
       }
@@ -37,7 +41,11 @@ async function callPersona(persona, brief, retries = 2) {
       return data.result;
     } catch (error) {
       if (attempt === retries) {
-        return `（${persona.name}暂时无法回应，请重试）`;
+        const message =
+          error instanceof Error && error.message
+            ? error.message.slice(0, 120)
+            : "暂时无法回应，请重试";
+        return `（${persona.name}暂时无法回应：${message}）`;
       }
 
       await new Promise((resolve) => {

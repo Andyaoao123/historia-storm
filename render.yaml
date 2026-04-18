@@ -9,7 +9,7 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_MODEL
-        value: anthropic/claude-3.5-sonnet
+        value: qwen/qwen-2.5-7b-instruct
       - key: OPENROUTER_SITE_URL
         sync: false
       - key: OPENROUTER_APP_NAME
