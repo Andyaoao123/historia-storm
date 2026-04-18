@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.vercel
+historia-storm.jsx
