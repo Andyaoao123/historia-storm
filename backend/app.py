@@ -8,7 +8,12 @@ from flask_cors import CORS
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(
+    app,
+    resources={r"/api/*": {"origins": "*"}},
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "OPTIONS"],
+)
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -23,8 +28,11 @@ def health():
     return jsonify({"status": "ok"})
 
 
-@app.post("/api/storm")
+@app.route("/api/storm", methods=["POST", "OPTIONS"])
 def storm():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
     if not OPENROUTER_API_KEY:
         return jsonify({"error": "Missing OPENROUTER_API_KEY"}), 500
 
