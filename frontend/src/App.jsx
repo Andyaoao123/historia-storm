@@ -29,6 +29,22 @@ const DEFAULT_MODELS = {
   deepseek: "deepseek-chat",
   qwen: "qwen-plus",
 };
+const MODEL_SUGGESTIONS = {
+  openrouter: [
+    "openai/gpt-4.1",
+    "openai/gpt-4.1-mini",
+    "anthropic/claude-3.7-sonnet",
+    "google/gemini-2.5-pro-preview",
+    "google/gemini-2.5-flash-preview",
+    "deepseek/deepseek-chat-v3-0324",
+    "deepseek/deepseek-r1",
+    "qwen/qwen-2.5-72b-instruct",
+    "meta-llama/llama-3.3-70b-instruct",
+    "x-ai/grok-3-mini-beta",
+  ],
+  deepseek: ["deepseek-chat", "deepseek-reasoner"],
+  qwen: ["qwen-turbo", "qwen-plus", "qwen-max", "qwen-long"],
+};
 
 const supabase =
   supabaseUrl && supabaseAnonKey
@@ -126,6 +142,10 @@ export default function App() {
 
   const currentProvider = useMemo(
     () => PROVIDER_OPTIONS.find((item) => item.value === apiConfig.provider) ?? PROVIDER_OPTIONS[0],
+    [apiConfig.provider]
+  );
+  const currentModelSuggestions = useMemo(
+    () => MODEL_SUGGESTIONS[apiConfig.provider] ?? [],
     [apiConfig.provider]
   );
 
@@ -402,12 +422,46 @@ export default function App() {
             </label>
             <label style={fieldLabelStyle}>
               <span>模型名</span>
-              <input
-                value={apiConfig.model}
-                onChange={(event) => updateApiConfig("model", event.target.value)}
-                placeholder={currentProvider.modelPlaceholder}
-                style={inputStyle}
-              />
+              <div style={{ display: "grid", gap: 8 }}>
+                <input
+                  list={`model-suggestions-${apiConfig.provider}`}
+                  value={apiConfig.model}
+                  onChange={(event) => updateApiConfig("model", event.target.value)}
+                  placeholder={currentProvider.modelPlaceholder}
+                  style={inputStyle}
+                />
+                <datalist id={`model-suggestions-${apiConfig.provider}`}>
+                  {currentModelSuggestions.map((model) => (
+                    <option key={model} value={model} />
+                  ))}
+                </datalist>
+                {currentModelSuggestions.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {currentModelSuggestions.map((model) => (
+                      <button
+                        key={model}
+                        type="button"
+                        onClick={() => updateApiConfig("model", model)}
+                        style={{
+                          border: "1px solid rgba(242,163,122,0.24)",
+                          background:
+                            apiConfig.model === model ? "rgba(242,163,122,0.18)" : "rgba(255,255,255,0.7)",
+                          color: "#7a6050",
+                          borderRadius: 999,
+                          padding: "6px 10px",
+                          fontSize: 11,
+                          lineHeight: 1.2,
+                          fontFamily: "'Noto Sans SC', sans-serif",
+                          cursor: "pointer",
+                          width: "auto",
+                        }}
+                      >
+                        {model}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </label>
             <label style={fieldLabelStyle}>
               <span>API Key</span>
@@ -436,6 +490,8 @@ export default function App() {
             }}
           >
             当前支持：OpenRouter、DeepSeek、千问兼容接口。
+            <br />
+            OpenRouter 可以直接填任意支持的模型 ID，也可以点下面热门模型快速切换。
             <br />
             如果你切换供应商但没手动改模型名，系统会自动给你带一个推荐默认值。
           </div>
