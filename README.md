@@ -92,44 +92,24 @@ create table if not exists briefs (
 
 当前项目未做 Auth。若前端需要直接读写 `briefs`，请为这张表配置合适的 RLS 策略，或者仅在受控环境下开放。
 
-## 部署到 Vercel + Render
+## 部署到 Vercel
 
-### 前端部署到 Vercel
-
-1. 在 Vercel 导入 GitHub 仓库 `Andyaoao123/historia-storm`。
-2. Root Directory 选择 `frontend`。
-3. Build Command 设为 `npm run build`。
-4. Output Directory 设为 `dist`。
-5. 配置环境变量：
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-   - `VITE_API_BASE_URL` = Render 后端域名
-
-### 后端部署到 Render
-
-1. 在 Render 创建 Web Service，连接同一个 GitHub 仓库。
-2. Root Directory 选择 `backend`。
-3. Build Command：
-
-```bash
-pip install -r requirements.txt
-```
-
-4. Start Command：
-
-```bash
-gunicorn app:app
-```
-
-5. 配置环境变量：
+1. 在 Vercel 直接导入仓库根目录，不需要再拆成前后端两个服务。
+2. 项目会读取根目录的 [vercel.json](/D:/MySecondBrain/Obsidian%20Vault/hack/Historia%20Storm/vercel.json)：
+   - 前端构建命令：`npm run build --prefix frontend`
+   - 静态输出目录：`frontend/dist`
+   - 后端接口：根目录 `api/*.py` 作为 Vercel Functions
+3. 推荐环境变量：
+   - 可选：`VITE_SUPABASE_URL`
+   - 可选：`VITE_SUPABASE_ANON_KEY`
    - 可选：`OPENROUTER_API_KEY`
    - 可选：`DEEPSEEK_API_KEY`
    - 可选：`QWEN_API_KEY`
    - 可选：`OPENROUTER_MODEL` / `DEEPSEEK_MODEL` / `QWEN_MODEL`
-   - `OPENROUTER_SITE_URL`（可选）
-   - `OPENROUTER_APP_NAME`（可选）
-
-Render 部署完成后，把它的公网域名填回 Vercel 的 `VITE_API_BASE_URL`。
+   - 可选：`OPENROUTER_SITE_URL`
+   - 可选：`OPENROUTER_APP_NAME`
+4. 如果你不配供应商密钥，页面上也可以直接输入自己的 `API Key + 模型 + 供应商` 使用。
+5. 线上访问时，前端会直接请求同域名下的 `/api/storm`，不再依赖 Render。
 
 ## 线上备注
 
