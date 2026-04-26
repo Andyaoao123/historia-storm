@@ -2,9 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "outputDirectory": "dist",
   "functions": {
-    "app.py": {
+    "api/*.py": {
       "maxDuration": 60,
-      "excludeFiles": "{node_modules/**,dist/**,api/**,**/__pycache__/**}"
+      "excludeFiles": "{node_modules/**,dist/**,**/__pycache__/**}"
     }
   }
 }
