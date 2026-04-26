@@ -1,6 +1,6 @@
 # Historia Storm
 
-把单文件 React artifact 改造成可部署的全栈 Web App：前端负责交互与 Brief 历史，后端负责安全代理 OpenRouter。
+把单文件 React artifact 改造成可部署的全栈 Web App：前端负责交互与 Brief 历史，后端负责按请求代理 OpenRouter、DeepSeek、千问兼容接口。
 
 ## 项目结构
 
@@ -58,7 +58,11 @@ python app.py
 
 ```env
 OPENROUTER_API_KEY=your_openrouter_key_here
-OPENROUTER_MODEL=qwen/qwen-2.5-7b-instruct
+OPENROUTER_MODEL=qwen/qwen-2.5-72b-instruct
+DEEPSEEK_API_KEY=
+DEEPSEEK_MODEL=deepseek-chat
+QWEN_API_KEY=
+QWEN_MODEL=qwen-plus
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_SUPABASE_URL=your_supabase_project_url
@@ -66,8 +70,9 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_API_BASE_URL=http://localhost:5000
 ```
 
-- `OPENROUTER_API_KEY`：只给 Flask 后端使用。
-- `OPENROUTER_MODEL`：当前已验证可用的默认模型是 `qwen/qwen-2.5-7b-instruct`。
+- 前端默认推荐你在页面里直接输入 `API Key + 模型 + 供应商`，密钥只保存在当前浏览器本地。
+- `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY` / `QWEN_API_KEY`：可选，作为后端默认兜底 key。
+- `OPENROUTER_MODEL` / `DEEPSEEK_MODEL` / `QWEN_MODEL`：对应供应商的默认模型名。
 - `SUPABASE_URL` / `SUPABASE_ANON_KEY`：给后端或脚本预留。
 - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`：前端直连 Supabase 用。
 - `VITE_API_BASE_URL`：前端访问 Render/Flask 后端的地址；本地可写 `http://localhost:5000`。
@@ -117,8 +122,10 @@ gunicorn app:app
 ```
 
 5. 配置环境变量：
-   - `OPENROUTER_API_KEY`
-   - `OPENROUTER_MODEL`：建议填 `qwen/qwen-2.5-7b-instruct`
+   - 可选：`OPENROUTER_API_KEY`
+   - 可选：`DEEPSEEK_API_KEY`
+   - 可选：`QWEN_API_KEY`
+   - 可选：`OPENROUTER_MODEL` / `DEEPSEEK_MODEL` / `QWEN_MODEL`
    - `OPENROUTER_SITE_URL`（可选）
    - `OPENROUTER_APP_NAME`（可选）
 
@@ -126,8 +133,8 @@ Render 部署完成后，把它的公网域名填回 Vercel 的 `VITE_API_BASE_U
 
 ## 线上备注
 
-- 当前线上已验证可用的 OpenRouter 模型：`qwen/qwen-2.5-7b-instruct`
-- 若使用 OpenRouter 账户时遇到 OpenAI / Anthropic / Google 模型不可用，通常和账户账单地区限制有关，不是前端或 Render 部署问题
+- 当前页面支持切换 OpenRouter、DeepSeek、千问兼容接口，并自动匹配请求 URL
+- 若后续再次出现 OpenAI / Anthropic / Google 模型不可用，通常和 OpenRouter 账户账单地区限制有关，不是前端或 Render 部署问题
 
 ## API 说明
 
@@ -138,7 +145,10 @@ Render 部署完成后，把它的公网域名填回 Vercel 的 `VITE_API_BASE_U
 ```json
 {
   "persona_prompt": "某个人格的完整提示词",
-  "brief": "用户输入的 Brief"
+  "brief": "用户输入的 Brief",
+  "provider": "openrouter | deepseek | qwen",
+  "model": "模型名",
+  "api_key": "用户临时输入的 API Key"
 }
 ```
 

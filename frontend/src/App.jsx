@@ -1,17 +1,68 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { PERSONAS } from "./personas";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
+const API_CONFIG_STORAGE_KEY = "historia-storm-api-config";
+const PROVIDER_OPTIONS = [
+  {
+    value: "openrouter",
+    label: "OpenRouter",
+    modelPlaceholder: "例如：qwen/qwen-2.5-72b-instruct",
+  },
+  {
+    value: "deepseek",
+    label: "DeepSeek",
+    modelPlaceholder: "例如：deepseek-chat",
+  },
+  {
+    value: "qwen",
+    label: "千问 / DashScope",
+    modelPlaceholder: "例如：qwen-plus",
+  },
+];
+const DEFAULT_PROVIDER = PROVIDER_OPTIONS[0].value;
+const DEFAULT_MODELS = {
+  openrouter: "qwen/qwen-2.5-72b-instruct",
+  deepseek: "deepseek-chat",
+  qwen: "qwen-plus",
+};
 
 const supabase =
   supabaseUrl && supabaseAnonKey
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
 
-async function callPersona(persona, brief, retries = 2) {
+function getInitialApiConfig() {
+  if (typeof window === "undefined") {
+    return {
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODELS[DEFAULT_PROVIDER],
+      apiKey: "",
+    };
+  }
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(API_CONFIG_STORAGE_KEY) || "{}");
+    const provider = saved.provider || DEFAULT_PROVIDER;
+
+    return {
+      provider,
+      model: saved.model || DEFAULT_MODELS[provider] || "",
+      apiKey: saved.apiKey || "",
+    };
+  } catch {
+    return {
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODELS[DEFAULT_PROVIDER],
+      apiKey: "",
+    };
+  }
+}
+
+async function callPersona(persona, brief, apiConfig, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       const response = await fetch(`${apiBaseUrl}/api/storm`, {
@@ -22,6 +73,9 @@ async function callPersona(persona, brief, retries = 2) {
         body: JSON.stringify({
           persona_prompt: persona.prompt,
           brief,
+          provider: apiConfig.provider,
+          model: apiConfig.model,
+          api_key: apiConfig.apiKey,
         }),
       });
 
@@ -68,6 +122,20 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [apiConfig, setApiConfig] = useState(() => getInitialApiConfig());
+
+  const currentProvider = useMemo(
+    () => PROVIDER_OPTIONS.find((item) => item.value === apiConfig.provider) ?? PROVIDER_OPTIONS[0],
+    [apiConfig.provider]
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(API_CONFIG_STORAGE_KEY, JSON.stringify(apiConfig));
+  }, [apiConfig]);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,8 +220,23 @@ export default function App() {
     await refreshHistory();
   };
 
+  const updateApiConfig = (key, value) => {
+    setApiConfig((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const changeProvider = (provider) => {
+    setApiConfig((prev) => ({
+      ...prev,
+      provider,
+      model: prev.model === DEFAULT_MODELS[prev.provider] ? DEFAULT_MODELS[provider] : prev.model,
+    }));
+  };
+
   const runStorm = async () => {
-    if (!brief.trim() || selectedPersonas.length === 0) {
+    if (!brief.trim() || selectedPersonas.length === 0 || !apiConfig.apiKey.trim()) {
       return;
     }
 
@@ -169,10 +252,16 @@ export default function App() {
       chosen.map((persona) => persona.name)
     );
 
+    const requestConfig = {
+      provider: apiConfig.provider,
+      model: apiConfig.model.trim() || DEFAULT_MODELS[apiConfig.provider],
+      apiKey: apiConfig.apiKey.trim(),
+    };
+
     const promises = chosen.map(async (persona) => {
       setLoading((prev) => ({ ...prev, [persona.id]: true }));
       try {
-        const result = await callPersona(persona, brief.trim());
+        const result = await callPersona(persona, brief.trim(), requestConfig);
         setResults((prev) => ({ ...prev, [persona.id]: result }));
       } catch (error) {
         setResults((prev) => ({ ...prev, [persona.id]: "调用失败，请重试" }));
@@ -188,6 +277,10 @@ export default function App() {
   const allDone =
     selectedPersonas.length > 0 &&
     selectedPersonas.every((id) => results[id] && !loading[id]);
+
+  const canRun = Boolean(
+    brief.trim() && selectedPersonas.length > 0 && apiConfig.apiKey.trim() && apiConfig.model.trim()
+  );
 
   return (
     <div
@@ -272,6 +365,81 @@ export default function App() {
             Historia Storm · 借历史的眼睛，看见你的盲点
           </div>
         </div>
+        <Section title="幕零  API 配置 → Private Keys" step="00">
+          <p
+            style={{
+              fontSize: 14,
+              color: "#9a7c6e",
+              marginBottom: 20,
+              lineHeight: 1.8,
+              fontFamily: "'Noto Sans SC', sans-serif",
+              fontWeight: 300,
+            }}
+          >
+            API Key 只保存在你当前浏览器的本地存储里，不写进网页公开配置。你只需要选供应商、填模型和
+            API Key，URL 会在后端自动匹配。
+          </p>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <label style={fieldLabelStyle}>
+              <span>模型供应商</span>
+              <select
+                value={apiConfig.provider}
+                onChange={(event) => changeProvider(event.target.value)}
+                style={inputStyle}
+              >
+                {PROVIDER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={fieldLabelStyle}>
+              <span>模型名</span>
+              <input
+                value={apiConfig.model}
+                onChange={(event) => updateApiConfig("model", event.target.value)}
+                placeholder={currentProvider.modelPlaceholder}
+                style={inputStyle}
+              />
+            </label>
+            <label style={fieldLabelStyle}>
+              <span>API Key</span>
+              <input
+                value={apiConfig.apiKey}
+                onChange={(event) => updateApiConfig("apiKey", event.target.value)}
+                placeholder="sk-..."
+                type="password"
+                autoComplete="off"
+                style={inputStyle}
+              />
+            </label>
+          </div>
+          <div
+            style={{
+              marginTop: 14,
+              padding: "14px 16px",
+              borderRadius: 16,
+              background: "rgba(255,255,255,0.65)",
+              border: "1px solid rgba(242,163,122,0.18)",
+              fontSize: 12,
+              color: "#7a6050",
+              lineHeight: 1.8,
+              fontFamily: "'Noto Sans SC', sans-serif",
+              fontWeight: 300,
+            }}
+          >
+            当前支持：OpenRouter、DeepSeek、千问兼容接口。
+            <br />
+            如果你切换供应商但没手动改模型名，系统会自动给你带一个推荐默认值。
+          </div>
+        </Section>
         <Section title="幕一  Human Storm → Brief" step="01">
           <p
             style={{
@@ -533,12 +701,9 @@ export default function App() {
           <div style={{ marginTop: 32, textAlign: "center" }}>
             <button
               onClick={runStorm}
-              disabled={!brief.trim() || selectedPersonas.length === 0}
+              disabled={!canRun}
               style={{
-                background:
-                  brief.trim() && selectedPersonas.length > 0
-                    ? "linear-gradient(135deg, #F2A37A, #E8896A)"
-                    : "#e0d0c0",
+                background: canRun ? "linear-gradient(135deg, #F2A37A, #E8896A)" : "#e0d0c0",
                 color: "white",
                 border: "none",
                 borderRadius: 50,
@@ -546,33 +711,30 @@ export default function App() {
                 fontSize: 15,
                 fontFamily: "'ZCOOL XiaoWei', serif",
                 letterSpacing: 2,
-                cursor:
-                  brief.trim() && selectedPersonas.length > 0
-                    ? "pointer"
-                    : "not-allowed",
+                cursor: canRun ? "pointer" : "not-allowed",
                 transition: "all 0.3s ease",
-                boxShadow:
-                  brief.trim() && selectedPersonas.length > 0
-                    ? "0 8px 24px rgba(242,163,122,0.4)"
-                    : "none",
+                boxShadow: canRun ? "0 8px 24px rgba(242,163,122,0.4)" : "none",
               }}
             >
               ✦ 开启历史风暴
             </button>
-            {selectedPersonas.length > 0 && (
-              <div
-                style={{
-                  marginTop: 10,
-                  fontSize: 12,
-                  color: "#9a7c6e",
-                  fontFamily: "'Noto Sans SC', sans-serif",
-                  fontWeight: 300,
-                }}
-              >
-                已选 {selectedPersonas.length} 位人格 ·{" "}
-                {selectedPersonas.length < 2 ? "再选一位效果更好" : "可以出发了"}
-              </div>
-            )}
+            <div
+              style={{
+                marginTop: 10,
+                fontSize: 12,
+                color: "#9a7c6e",
+                fontFamily: "'Noto Sans SC', sans-serif",
+                fontWeight: 300,
+              }}
+            >
+              {!apiConfig.apiKey.trim()
+                ? "先填 API Key 才能发起调用"
+                : selectedPersonas.length > 0
+                  ? `已选 ${selectedPersonas.length} 位人格 · ${
+                      selectedPersonas.length < 2 ? "再选一位效果更好" : "可以出发了"
+                    }`
+                  : "先选 2–4 位人格"}
+            </div>
           </div>
         </Section>
         {(phase === "storm" || phase === "synthesis") && (
@@ -715,7 +877,11 @@ export default function App() {
                             onClick={async (event) => {
                               event.stopPropagation();
                               setLoading((prev) => ({ ...prev, [persona.id]: true }));
-                              const result = await callPersona(persona, brief.trim());
+                              const result = await callPersona(persona, brief.trim(), {
+                                provider: apiConfig.provider,
+                                model: apiConfig.model.trim() || DEFAULT_MODELS[apiConfig.provider],
+                                apiKey: apiConfig.apiKey.trim(),
+                              });
                               setResults((prev) => ({ ...prev, [persona.id]: result }));
                               setLoading((prev) => ({ ...prev, [persona.id]: false }));
                             }}
@@ -848,7 +1014,9 @@ export default function App() {
           0%, 100% { opacity: 0.3; transform: scale(0.8); }
           50% { opacity: 1; transform: scale(1.2); }
         }
-        textarea:focus { outline: none; }
+        textarea:focus,
+        input:focus,
+        select:focus { outline: none; }
         button:active { transform: scale(0.97) !important; }
       `}</style>
     </div>
@@ -904,3 +1072,23 @@ function Section({ title, step, children }) {
     </div>
   );
 }
+
+const fieldLabelStyle = {
+  display: "grid",
+  gap: 8,
+  fontFamily: "'Noto Sans SC', sans-serif",
+  fontSize: 12,
+  color: "#9a7c6e",
+  letterSpacing: 1,
+};
+
+const inputStyle = {
+  width: "100%",
+  borderRadius: 14,
+  border: "1.5px solid rgba(242,163,122,0.25)",
+  background: "rgba(255,255,255,0.75)",
+  padding: "12px 14px",
+  color: "#4a3728",
+  fontSize: 14,
+  fontFamily: "'Noto Sans SC', sans-serif",
+};

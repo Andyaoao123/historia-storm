@@ -15,12 +15,26 @@ CORS(
     methods=["GET", "POST", "OPTIONS"],
 )
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODEL = os.getenv(
-    "OPENROUTER_MODEL",
-    "qwen/qwen-2.5-7b-instruct",
-)
+PROVIDER_CONFIGS = {
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1/chat/completions",
+        "default_model": os.getenv("OPENROUTER_MODEL", "qwen/qwen-2.5-72b-instruct"),
+        "headers": {
+            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "http://localhost:5173"),
+            "X-Title": os.getenv("OPENROUTER_APP_NAME", "Historia Storm"),
+        },
+    },
+    "deepseek": {
+        "base_url": "https://api.deepseek.com/chat/completions",
+        "default_model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "headers": {},
+    },
+    "qwen": {
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+        "default_model": os.getenv("QWEN_MODEL", "qwen-plus"),
+        "headers": {},
+    },
+}
 
 
 @app.get("/health")
@@ -33,15 +47,27 @@ def storm():
     if request.method == "OPTIONS":
         return ("", 204)
 
-    if not OPENROUTER_API_KEY:
-        return jsonify({"error": "Missing OPENROUTER_API_KEY"}), 500
-
     payload = request.get_json(silent=True) or {}
     persona_prompt = (payload.get("persona_prompt") or "").strip()
     brief = (payload.get("brief") or "").strip()
+    provider = (payload.get("provider") or "openrouter").strip().lower()
+    provider_config = PROVIDER_CONFIGS.get(provider)
+    api_key = (
+        (payload.get("api_key") or "").strip()
+        or os.getenv(f"{provider.upper()}_API_KEY", "").strip()
+    )
+    model = (payload.get("model") or "").strip()
 
     if not persona_prompt or not brief:
         return jsonify({"error": "persona_prompt and brief are required"}), 400
+
+    if provider_config is None:
+        return jsonify({"error": f"Unsupported provider: {provider}"}), 400
+
+    if not api_key:
+        return jsonify({"error": f"Missing API key for provider: {provider}"}), 400
+
+    model = model or provider_config["default_model"]
 
     user_prompt = (
         f"{persona_prompt}\n\n---\n以下是团队提出的创意Brief：\n\n{brief}\n\n---\n"
@@ -50,15 +76,14 @@ def storm():
 
     try:
         response = requests.post(
-            OPENROUTER_BASE_URL,
+            provider_config["base_url"],
             headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "http://localhost:5173"),
-                "X-Title": os.getenv("OPENROUTER_APP_NAME", "Historia Storm"),
+                **provider_config["headers"],
             },
             json={
-                "model": OPENROUTER_MODEL,
+                "model": model,
                 "messages": [{"role": "user", "content": user_prompt}],
                 "max_tokens": 1000,
             },
@@ -73,7 +98,7 @@ def storm():
                 detail = exc.response.json()
             except ValueError:
                 detail = exc.response.text
-        return jsonify({"error": "OpenRouter request failed", "detail": detail or str(exc)}), status_code
+        return jsonify({"error": f"{provider} request failed", "detail": detail or str(exc)}), status_code
 
     data = response.json()
     result = (
@@ -83,7 +108,7 @@ def storm():
     )
 
     if not result:
-        return jsonify({"error": "Empty response from OpenRouter", "detail": data}), 502
+        return jsonify({"error": f"Empty response from {provider}", "detail": data}), 502
 
     return jsonify({"result": result})
 
